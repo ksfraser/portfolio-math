@@ -1,0 +1,30 @@
+{
+  "name": "ksfraser/portfolio-math",
+  "description": "Portfolio performance calculations: TWR, IRR, drawdown, volatility, asset allocation. Shared library for stockmarket, FrontAccounting, ksfii_app.",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Kevin Fraser",
+      "email": "kevin@ksfraser.ca"
+    }
+  ],
+  "require": {
+    "php": ">=7.4"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "KSF\\Performance\\": "src/KSF/Performance/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "KSF\\Performance\\Tests\\": "tests/"
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
