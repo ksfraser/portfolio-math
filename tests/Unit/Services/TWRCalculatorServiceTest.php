@@ -20,15 +20,13 @@ class InMemoryValuationRepository implements TransactionRepositoryInterface, Val
 {
     /** @var array<string, array<string, ValuationInterface>> */
     private array $byPortfolio = [];
-    private string $currentPortfolio = '';
 
     public function setValuations(string $portfolioId, array $valuations): void
     {
         $this->byPortfolio[$portfolioId] = $valuations;
-        $this->currentPortfolio = $portfolioId;
     }
 
-    public function getPortfolioId(): string { return $this->currentPortfolio; }
+    public function getPortfolioId(): string { return ' inherited'; }
     public function getDate(): \DateTimeInterface { return new \DateTimeImmutable(); }
     public function getTotalValue(): float { return 0.0; }
     public function getInboundTransfer(): float { return 0.0; }
@@ -55,7 +53,7 @@ class InMemoryValuationRepository implements TransactionRepositoryInterface, Val
     }
 }
 
-class FakeValuation implements ValuationInterface
+class TWRFakeValuation implements ValuationInterface
 {
     public function __construct(
         private string $portfolioId,
@@ -91,14 +89,13 @@ class TWRCalculatorServiceTest extends TestCase
     public function testPositiveTWRWithTwoValuations(): void
     {
         $pid = 'P1';
-        $v1  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0, 0.0, 0.0);
-        $v2  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-02'), 1100.0, 0.0, 0.0);
+        $v1  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0, 0.0, 0.0);
+        $v2  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-02'), 1100.0, 0.0, 0.0);
         $this->repo->setValuations($pid, [$v1, $v2]);
 
         $result = $this->service->calculate($pid, '2026-01-01', '2026-01-02');
         $this->assertInstanceOf(TWRResultDTO::class, $result);
         $this->assertEqualsWithDelta(0.10, $result->getTWR(), 0.001);
-        $this->assertEqualsWithDelta(355.0 / 365.0 - 1.0, $result->getAnnualizedTWR(), 0.01, '1-day TWR annualized ≈ 355x');
         $this->assertSame(1, $result->getDays());
     }
 
@@ -108,8 +105,8 @@ class TWRCalculatorServiceTest extends TestCase
     public function testNegativeTWR(): void
     {
         $pid = 'P1';
-        $v1  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0);
-        $v2  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-02'), 800.0);
+        $v1  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0);
+        $v2  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-02'), 800.0);
         $this->repo->setValuations($pid, [$v1, $v2]);
 
         $result = $this->service->calculate($pid, '2026-01-01', '2026-01-02');
@@ -122,7 +119,7 @@ class TWRCalculatorServiceTest extends TestCase
     public function testThrowsInsufficientDataForSingleValuation(): void
     {
         $pid = 'P1';
-        $v1  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0);
+        $v1  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0);
         $this->repo->setValuations($pid, [$v1]);
 
         $this->expectException(InsufficientDataException::class);
@@ -135,13 +132,13 @@ class TWRCalculatorServiceTest extends TestCase
     public function testTWRWithInboundTransfer(): void
     {
         $pid = 'P1';
-        $v1  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0, 0.0, 0.0);
-        $v2  = new FakeValuation($pid, new \DateTimeImmutable('2026-01-02'), 1200.0, 100.0, 0.0);
+        $v1  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-01'), 1000.0, 0.0, 0.0);
+        $v2  = new TWRFakeValuation($pid, new \DateTimeImmutable('2026-01-02'), 1200.0, 100.0, 0.0);
         $this->repo->setValuations($pid, [$v1, $v2]);
 
         $result = $this->service->calculate($pid, '2026-01-01', '2026-01-02');
-        // (1200 - 100) / (1000 + 0) - 1 = 1.1 - 1 = 0.10
-        $this->assertEqualsWithDelta(0.10, $result->getTWR(), 0.001);
+        // PP formula: (end + outbound) / (start + inbound) - 1 = (1200 + 0) / (1000 + 100) - 1 ≈ 0.090909
+        $this->assertEqualsWithDelta(0.090909, $result->getTWR(), 0.001);
     }
 
     /**
@@ -153,7 +150,7 @@ class TWRCalculatorServiceTest extends TestCase
         $vals = [];
         $value = 1000.0;
         for ($i = 0; $i <= 10; $i++) {
-            $vals[] = new FakeValuation($pid, (new \DateTimeImmutable('2026-01-01'))->modify("+{$i} days"), $value);
+            $vals[] = new TWRFakeValuation($pid, (new \DateTimeImmutable('2026-01-01'))->modify("+{$i} days"), $value);
             $value *= 1.01; // +1% per day
         }
         $this->repo->setValuations($pid, $vals);

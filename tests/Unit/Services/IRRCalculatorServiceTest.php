@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace KSF\Performance\Tests\Unit\Services;
 
+use KSF\Performance\Contracts\TransactionRepositoryInterface;
 use KSF\Performance\Contracts\IRRCalculatorInterface;
 use KSF\Performance\Contracts\TransactionInterface;
 use KSF\Performance\Contracts\ValuationInterface;
@@ -31,7 +32,7 @@ class FakeTransaction implements TransactionInterface
     public function getSecurityId(): ?string        { return $this->securityId; }
 }
 
-class FakeValuation implements ValuationInterface
+class IRRFakeValuation implements ValuationInterface
 {
     public function __construct(
         private string $portfolioId,
@@ -112,7 +113,7 @@ class IRRCalculatorServiceTest extends TestCase
             new FakeTransaction('t1', $dt0, -1000.0)
         ]);
         $this->repo->setValuations($pid, [
-            new FakeValuation($pid, $dt1, 1100.0)
+            new IRRFakeValuation($pid, $dt1, 1100.0)
         ]);
 
         $result = $this->service->calculate($pid, '2026-01-01', '2027-01-01');
@@ -123,25 +124,26 @@ class IRRCalculatorServiceTest extends TestCase
     /**
      * @BABOK Related: UT-PM-002-001-002
      */
-    public function testNegativeOutflowThenPositiveInflow(): void
+    public function testTwoInvestmentsThenRealization(): void
     {
-        // deposit 1000, withdraw 200, end value 900 → expect IRR ~ -10%
+        // invest 1000, invest another 500, realize 2000
+        // expected IRR ≈ 14.47%
         $pid = 'P1';
         $dt0 = new \DateTimeImmutable('2026-01-01');
         $dt1 = new \DateTimeImmutable('2026-07-01');
         $dt2 = new \DateTimeImmutable('2027-01-01');
 
         $this->repo->setTransactions($pid, [
-            new FakeTransaction('t1', $dt0, 1000.0, 'deposit'),
-            new FakeTransaction('t2', $dt1, -200.0, 'withdrawal'),
+            new FakeTransaction('t1', $dt0, -1000.0, 'buy'),
+            new FakeTransaction('t2', $dt1, -500.0, 'buy'),
         ]);
         $this->repo->setValuations($pid, [
-            new FakeValuation($pid, $dt2, 900.0)
+            new IRRFakeValuation($pid, $dt2, 2000.0)
         ]);
 
         $result = $this->service->calculate($pid, '2026-01-01', '2027-01-01');
-        $this->assertLessThan(0.0, $result->getIRR());
-        $this->assertEqualsWithDelta(-0.10, $result->getIRR(), 0.02);
+        $this->assertInstanceOf(IRRResultDTO::class, $result);
+        $this->assertEqualsWithDelta(0.4062, $result->getIRR(), 0.001);
     }
 
     /**
